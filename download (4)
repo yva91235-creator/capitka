@@ -1,0 +1,185 @@
+import { 
+  Gift, 
+  Copy, 
+  CheckCircle2, 
+  TrendingUp,
+  Users
+} from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { db } from '../lib/db';
+import { Card, Button, cn } from '../components/ui';
+import { useAuthStore } from '../store/authStore';
+
+export const Referrals = () => {
+  const { user } = useAuthStore();
+  const [copied, setCopied] = useState(false);
+  const [referrals, setReferrals] = useState<any[]>([]);
+  const [totalEarned, setTotalEarned] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const referralLink = `${window.location.origin}/register?ref=${user?.referral_code || 'PROMO2024'}`;
+
+  useEffect(() => {
+    fetchReferrals();
+  }, [user?.id]);
+
+  const fetchReferrals = async () => {
+    if (!user?.id) return;
+    try {
+      const res = await db.execute({
+        sql: 'SELECT full_name, email, created_at, status FROM users WHERE referred_by = ? ORDER BY created_at DESC',
+        args: [user.id]
+      });
+      setReferrals(res.rows);
+
+      const bonusRes = await db.execute({
+        sql: 'SELECT SUM(amount) as total FROM transactions WHERE user_id = ? AND type = "referral_bonus"',
+        args: [user.id]
+      });
+      setTotalEarned(Number(bonusRes.rows[0]?.total || 0));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(referralLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-8">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        <div>
+          <h1 className="text-3xl font-bold text-[#F1F5F9]">Партнерская программа</h1>
+          <p className="text-[#94A3B8]">Зарабатывайте до 8% бонусов, приглашая друзей</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="px-6 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
+            <p className="text-[10px] text-[#64748B] uppercase font-bold tracking-widest mb-1">Всего заработано</p>
+            <p className="text-emerald-400 font-black text-2xl">${totalEarned.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-8">
+          <Card className="p-8 bg-gradient-to-br from-[#1E293B] to-[#0F111A] border-[#38BDF8]/20 overflow-hidden relative shadow-2xl group">
+             <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none transition-transform duration-1000 group-hover:scale-110"><Gift size={240} /></div>
+            <div className="relative z-10 space-y-8">
+              <div className="max-w-md">
+                <h3 className="text-2xl font-bold text-[#F1F5F9] mb-4">Приглашайте друзей и растите вместе</h3>
+                <p className="text-[#94A3B8] leading-relaxed">Поделитесь ссылкой ниже. Когда ваши приглашенные друзья инвестируют в проекты, вы мгновенно получите бонус на баланс.</p>
+              </div>
+              <div className="space-y-4">
+                <label className="text-xs font-bold text-[#64748B] uppercase tracking-wider">Ваша партнерская ссылка</label>
+                <div className="flex gap-2">
+                  <div className="flex-1 bg-[#0A0C15] border border-[#334155] rounded-xl px-4 py-4 text-sm text-[#38BDF8] font-mono truncate shadow-inner">{referralLink}</div>
+                  <Button onClick={handleCopy} className="shrink-0 px-6 h-[52px]">{copied ? <CheckCircle2 className="w-5 h-5" /> : <Copy className="w-5 h-5" />}</Button>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4 pt-4">
+                {[
+                  { level: '1 Уровень', percent: '5%', color: 'text-[#38BDF8]', desc: 'Прямые рефералы' },
+                  { level: '2 Уровень', percent: '2%', color: 'text-purple-400', desc: 'Второй круг' },
+                  { level: '3 Уровень', percent: '1%', color: 'text-orange-400', desc: 'Третий круг' },
+                ].map((l) => (
+                  <div key={l.level} className="p-4 bg-[#111827]/50 rounded-2xl border border-[#334155]/50 text-center transition-transform hover:scale-105">
+                    <p className="text-[10px] text-[#64748B] uppercase font-bold mb-1">{l.level}</p>
+                    <p className={cn("text-2xl font-black", l.color)}>{l.percent}</p>
+                    <p className="text-[9px] text-[#475569] mt-1">{l.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-0 overflow-hidden shadow-xl border-[#1E293B]">
+            <div className="p-6 border-b border-[#1E293B] flex items-center justify-between">
+              <h4 className="text-lg font-bold text-[#F1F5F9]">Список рефералов</h4>
+              <span className="px-3 py-1 bg-[#1E293B] rounded-full text-xs font-bold text-[#38BDF8]">{referrals.length} чел.</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-[#0F111A] text-[10px] font-bold text-[#64748B] uppercase tracking-widest border-b border-[#1E293B]">
+                  <tr>
+                    <th className="px-6 py-4">Партнер</th>
+                    <th className="px-6 py-4">Дата регистрации</th>
+                    <th className="px-6 py-4">Статус</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#1E293B]">
+                  {isLoading ? (
+                    <tr><td colSpan={3} className="px-6 py-12 text-center text-[#64748B]">Загрузка данных...</td></tr>
+                  ) : referrals.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="px-6 py-20 text-center">
+                        <div className="flex flex-col items-center gap-4 opacity-30">
+                          <Users size={48} />
+                          <p className="text-sm">У вас пока нет приглашенных партнеров</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    referrals.map((ref, i) => (
+                      <tr key={i} className="hover:bg-[#1E293B]/30 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-xs font-bold text-[#38BDF8]">
+                              {ref.full_name?.charAt(0) || 'U'}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-[#F1F5F9]">{ref.full_name}</p>
+                              <p className="text-[10px] text-[#64748B]">{ref.email}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-xs text-[#94A3B8] font-medium">{new Date(ref.created_at).toLocaleDateString()}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={cn(
+                            "px-3 py-1 text-[10px] font-bold rounded-lg uppercase tracking-wider",
+                            ref.status === 'active' ? "bg-emerald-500/10 text-emerald-500" : "bg-orange-500/10 text-orange-400"
+                          )}>{ref.status === 'active' ? 'Активен' : 'Ожидает'}</span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+
+        <div className="space-y-6">
+          <Card className="p-6 bg-[#38BDF8]/5 border-[#38BDF8]/20">
+            <div className="w-12 h-12 bg-[#38BDF8] rounded-2xl flex items-center justify-center text-white mb-6"><TrendingUp size={24} /></div>
+            <h4 className="text-lg font-bold text-white mb-2">Влияние программы</h4>
+            <p className="text-sm text-[#94A3B8] leading-relaxed mb-6">Рефералы составляют <span className="text-[#38BDF8] font-bold">12%</span> вашего дохода. Топ инвесторы получают до 40% прибыли через сеть.</p>
+            <Button variant="outline" className="w-full">Инструкция</Button>
+          </Card>
+
+          <Card className="p-6 space-y-6">
+            <h4 className="text-sm font-bold text-[#64748B] uppercase tracking-wider">Награды за активность</h4>
+            <div className="space-y-4">
+              {[
+                { label: 'Золотой ранг', goal: '50 человек', prize: '$1,000 Бонус' },
+                { label: 'Серебряный ранг', goal: '25 человек', prize: '$400 Бонус' },
+              ].map((tier) => (
+                <div key={tier.label} className="p-4 bg-[#0F111A] border border-[#334155] rounded-2xl">
+                  <div className="flex justify-between items-center mb-2"><span className="text-sm font-bold text-white">{tier.label}</span><span className="text-xs text-[#38BDF8] font-bold">{tier.prize}</span></div>
+                  <div className="w-full h-1.5 bg-[#1E293B] rounded-full overflow-hidden"><div className="h-full bg-[#38BDF8] w-[45%]" /></div>
+                  <div className="flex justify-between mt-2"><span className="text-[10px] text-[#64748B]">{tier.goal}</span><span className="text-[10px] text-[#38BDF8]">осталось 12</span></div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+};

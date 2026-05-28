@@ -1,0 +1,251 @@
+import { useState, useEffect } from 'react';
+import { Card, Button, Input, cn } from '../components/ui';
+import { useAuthStore } from '../store/authStore';
+import { useLangStore } from '../store/langStore';
+import { 
+  User, Mail, ShieldCheck, TrendingUp, Building2, FileText, Lock,
+  Camera, CheckCircle2, Bell, Globe, Cpu, Fingerprint, ShieldEllipsis
+} from 'lucide-react';
+import { db } from '../lib/db';
+import { motion, AnimatePresence } from 'framer-motion';
+
+const generateSeedPhrase = () => {
+  const words = ['apple', 'river', 'moon', 'star', 'ocean', 'tree', 'wind', 'fire', 'cloud', 'stone', 'gold', 'silver', 'iron', 'silk', 'wave', 'dawn', 'mist', 'cave', 'peak', 'nest', 'leaf', 'root', 'seed', 'bark'];
+  const seed: string[] = [];
+  for (let i = 0; i < 12; i++) seed.push(words[Math.floor(Math.random() * words.length)]);
+  return seed;
+};
+
+export const Profile = () => {
+  const { user, updateUser } = useAuthStore();
+  const { lang, t } = useLangStore();
+  const [isLoading, setIsLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showSeedModal, setShowSeedModal] = useState(false);
+  const [avatar, setAvatar] = useState<string | null>(null);
+  const [seedPhrase] = useState(generateSeedPhrase());
+  const [passwords, setPasswords] = useState({ current: '', newPass: '', confirm: '' });
+  const [formData, setFormData] = useState({
+    fullName: user?.full_name || '',
+    telegram: user?.telegram_id || '',
+    companyName: user?.company_name || '',
+    inn: user?.inn || ''
+  });
+
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        fullName: user.full_name || '',
+        telegram: user.telegram_id || '',
+        companyName: user.company_name || '',
+        inn: user.inn || ''
+      });
+    }
+  }, [user]);
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && user) {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = reader.result as string;
+        setAvatar(base64);
+        try {
+          await db.execute({ sql: 'UPDATE users SET avatar_url = ? WHERE id = ?', args: [base64, user.id] });
+          updateUser({ avatar_url: base64 });
+        } catch (err) { console.error(err); }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setIsLoading(true);
+    try {
+      await db.execute({
+        sql: 'UPDATE users SET full_name = ?, telegram_id = ?, company_name = ?, inn = ? WHERE id = ?',
+        args: [formData.fullName, formData.telegram, formData.companyName, formData.inn, user.id]
+      });
+      updateUser({ full_name: formData.fullName, telegram_id: formData.telegram, company_name: formData.companyName, inn: formData.inn });
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) { console.error(err); } finally { setIsLoading(false); }
+  };
+
+  const handlePasswordChange = async () => {
+    if (passwords.newPass !== passwords.confirm) { alert(lang === 'ru' ? 'Пароли не совпадают' : 'Passwords do not match'); return; }
+    if (!user) return;
+    try {
+      await db.execute({ sql: 'UPDATE users SET password = ? WHERE id = ? AND password = ?', args: [passwords.newPass, user.id, passwords.current] });
+      setShowPasswordModal(false);
+      setPasswords({ current: '', newPass: '', confirm: '' });
+      alert(lang === 'ru' ? 'Пароль успешно изменен' : 'Password changed successfully');
+    } catch (err) { console.error(err); }
+  };
+
+  const tx = (key: string) => t(key);
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
+      <div>
+        <h1 className="text-3xl font-bold text-white">{tx('profile')}</h1>
+        <p className="text-[#94A3B8]">{lang === 'ru' ? 'Управление данными и безопасностью' : 'Manage your data and security'}</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-1 space-y-6">
+          <Card className="p-8 text-center bg-gradient-to-b from-[#1E293B] to-[#0A0C15] border-[#38BDF8]/20">
+            <div className="relative w-24 h-24 mx-auto mb-6">
+              <div className="w-full h-full rounded-3xl bg-[#111827] border-2 border-[#334155] flex items-center justify-center overflow-hidden shadow-[0_0_20px_rgba(56,189,248,0.2)]">
+                <img src={avatar || user?.avatar_url || `https://i.pravatar.cc/150?u=${user?.email}`} className="w-full h-full object-cover" alt="Avatar" />
+              </div>
+              <label htmlFor="avatar-upload" className="absolute -bottom-2 -right-2 w-8 h-8 bg-[#38BDF8] rounded-xl flex items-center justify-center text-white shadow-lg cursor-pointer hover:scale-110 transition-transform">
+                <Camera size={16} />
+                <input type="file" id="avatar-upload" className="hidden" accept="image/*" onChange={handleAvatarChange} />
+              </label>
+            </div>
+            <h3 className="text-xl font-bold text-white">{user?.full_name}</h3>
+            <p className="text-sm text-[#38BDF8] font-bold uppercase tracking-wider mt-1">
+              {user?.role === 'admin' ? (lang === 'ru' ? 'Администратор' : 'Administrator') : 
+               user?.role === 'founder' ? (lang === 'ru' ? 'Основатель' : 'Founder') : 
+               (lang === 'ru' ? 'Инвестор' : 'Investor')}
+            </p>
+            <div className="mt-6 pt-6 border-t border-white/5 space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-[#64748B]">KYC</span>
+                <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold uppercase", 
+                  user?.kyc_status === 'approved' ? "bg-emerald-500/10 text-emerald-500" : "bg-orange-500/10 text-orange-400")}>
+                  {user?.kyc_status === 'approved' ? (lang === 'ru' ? 'Подтвержден' : 'Verified') : (lang === 'ru' ? 'Ожидание' : 'Pending')}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-[#64748B]">ID</span>
+                <span className="text-[#94A3B8] font-mono text-xs">{user?.id?.substring(0, 12)}...</span>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        <div className="lg:col-span-2 space-y-6">
+          <Card className="p-8">
+            <h3 className="text-xl font-bold text-white mb-8 flex items-center gap-3">
+              <User className="text-[#38BDF8]" /> {tx('personalInfo')}
+            </h3>
+            <form onSubmit={handleSave} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Input label={lang === 'ru' ? 'ФИО' : 'Full Name'} value={formData.fullName} onChange={(e) => setFormData({...formData, fullName: e.target.value})} icon={<User size={18}/>} />
+                <Input label="Email" value={user?.email || ''} disabled icon={<Mail size={18}/>} className="opacity-50 cursor-not-allowed" />
+                <Input label="Telegram" value={formData.telegram} onChange={(e) => setFormData({...formData, telegram: e.target.value})} icon={<TrendingUp size={18}/>} />
+              </div>
+              {user?.role === 'founder' && (
+                <div className="pt-6 border-t border-white/5 space-y-6">
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Building2 size={18} className="text-[#818CF8]" /> {lang === 'ru' ? 'Данные организации' : 'Company Data'}
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Input label={lang === 'ru' ? 'Компания' : 'Company'} value={formData.companyName} onChange={(e) => setFormData({...formData, companyName: e.target.value})} icon={<Building2 size={18}/>} />
+                    <Input label={lang === 'ru' ? 'ИНН' : 'Tax ID'} value={formData.inn} onChange={(e) => setFormData({...formData, inn: e.target.value})} icon={<FileText size={18}/>} />
+                  </div>
+                </div>
+              )}
+              <div className="pt-8 flex flex-col md:flex-row gap-4">
+                <Button type="submit" className="flex-1 h-12" isLoading={isLoading}>
+                  {success ? <><CheckCircle2 className="mr-2" size={18}/> {tx('saveChanges')}</> : tx('saveChanges')}
+                </Button>
+                <Button variant="outline" className="flex-1 h-12" type="button" onClick={() => setShowPasswordModal(true)}>
+                  <Lock className="mr-2" size={18}/> {tx('changePassword')}
+                </Button>
+              </div>
+            </form>
+          </Card>
+
+          <Card className="p-8 border-orange-500/10">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 bg-orange-500/10 rounded-xl flex items-center justify-center text-orange-400"><ShieldCheck size={24} /></div>
+              <div>
+                <h3 className="text-lg font-bold text-white">{tx('security')}</h3>
+                <p className="text-sm text-[#64748B]">{lang === 'ru' ? 'Сид-фраза для восстановления доступа' : 'Seed phrase for access recovery'}</p>
+              </div>
+            </div>
+            <div className="p-6 bg-[#0F111A] rounded-3xl border border-[#1E293B]">
+              <p className="text-sm text-[#94A3B8] mb-4">
+                {lang === 'ru' ? 'Сид-фраза — это 12 слов для восстановления доступа при утере пароля.' : 'Seed phrase is 12 words for password recovery.'}
+                <button onClick={() => setShowSeedModal(true)} className="text-[#38BDF8] underline ml-2">{lang === 'ru' ? 'Показать' : 'Show'}</button>
+              </p>
+              <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-4">
+                <p className="text-[10px] text-orange-400 font-bold">
+                  ⚠️ {lang === 'ru' ? 'Храните эти слова в секрете. Потеря = потеря доступа.' : 'Keep secret. Loss = permanent lockout.'}
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[
+              { icon: Globe, label: 'Multi-Region', desc: lang === 'ru' ? 'Глобальная сеть узлов' : 'Global node network' },
+              { icon: Cpu, label: 'Quantum Guard', desc: lang === 'ru' ? 'Постквантовая защита' : 'Post-quantum protection' },
+              { icon: Fingerprint, label: 'Behavioral Auth', desc: lang === 'ru' ? 'Анализ поведения' : 'Behavior analysis' },
+              { icon: Bell, label: 'Webhooks API', desc: lang === 'ru' ? 'Интеграция' : 'Integration' },
+              { icon: ShieldCheck, label: 'Cold Storage', desc: lang === 'ru' ? '98% офлайн' : '98% offline' },
+              { icon: ShieldEllipsis, label: 'Audit 2.0', desc: lang === 'ru' ? 'Публичный аудит' : 'Public audit' },
+            ].map((feat, i) => (
+              <Card key={i} className="p-4 border-white/5 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-[#1E293B] flex items-center justify-center text-[#38BDF8]"><feat.icon size={16}/></div>
+                <div><p className="text-xs font-bold text-white">{feat.label}</p><p className="text-[10px] text-[#64748B]">{feat.desc}</p></div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {showPasswordModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-md">
+              <Card className="p-8">
+                <h3 className="text-xl font-bold text-white mb-6">{tx('changePassword')}</h3>
+                <div className="space-y-4">
+                  <Input label={lang === 'ru' ? 'Текущий пароль' : 'Current Password'} type="password" value={passwords.current} onChange={(e) => setPasswords({...passwords, current: e.target.value})} />
+                  <Input label={lang === 'ru' ? 'Новый пароль' : 'New Password'} type="password" value={passwords.newPass} onChange={(e) => setPasswords({...passwords, newPass: e.target.value})} />
+                  <Input label={lang === 'ru' ? 'Повторите пароль' : 'Confirm Password'} type="password" value={passwords.confirm} onChange={(e) => setPasswords({...passwords, confirm: e.target.value})} />
+                  <div className="flex gap-4 pt-4">
+                    <Button variant="outline" className="flex-1" onClick={() => setShowPasswordModal(false)}>{tx('cancel')}</Button>
+                    <Button className="flex-1" onClick={handlePasswordChange}>{tx('saveChanges')}</Button>
+                  </div>
+                </div>
+              </Card>
+            </motion.div>
+          </div>
+        )}
+
+        {showSeedModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-md">
+              <Card className="p-8 border-orange-500/30">
+                <h3 className="text-xl font-bold text-white mb-2">{lang === 'ru' ? 'Ваша Сид-фраза' : 'Your Seed Phrase'}</h3>
+                <p className="text-xs text-[#94A3B8] mb-6">{lang === 'ru' ? 'Запишите эти слова в безопасное место' : 'Write these words in a safe place'}</p>
+                <div className="grid grid-cols-3 gap-2 mb-6">
+                  {seedPhrase.map((word, i) => (
+                    <div key={i} className="p-2 bg-[#0F111A] border border-[#334155] rounded-lg text-center">
+                      <span className="text-[10px] text-[#64748B] block">{i + 1}</span>
+                      <span className="text-sm font-bold text-white">{word}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-3 mb-6">
+                  <p className="text-[10px] text-orange-400 font-bold">
+                    ⚠️ {lang === 'ru' ? 'Храните эти слова в секрете. Потеря = потеря доступа.' : 'Keep secret. Loss = permanent lockout.'}
+                  </p>
+                </div>
+                <Button className="w-full" onClick={() => setShowSeedModal(false)}>{lang === 'ru' ? 'Я сохранил' : 'I saved it'}</Button>
+              </Card>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};

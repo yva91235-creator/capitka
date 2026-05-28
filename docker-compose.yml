@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    environment:
+      - TURSO_URL=libsql://apv-capitalflow21.aws-ap-northeast-1.turso.io
+      - TURSO_TOKEN=${TURSO_TOKEN}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-8993462767:AAEF4Ymqmwm1HLeo0Q0nDG95lbJ5GOijUcU}
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.server
+    ports:
+      - "3001:3001"
+    environment:
+      - TURSO_URL=libsql://apv-capitalflow21.aws-ap-northeast-1.turso.io
+      - TURSO_TOKEN=${TURSO_TOKEN}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-8993462767:AAEF4Ymqmwm1HLeo0Q0nDG95lbJ5GOijUcU}
+      - NODE_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:
